@@ -15,6 +15,7 @@
 
 #define PM050_PIN		     D5
 #define PM050_BAUDRATE       9600
+#define PM050_MODE			 SERIAL_8N1
 #define PM050_FRAME_SIZE     24
 #define PM050_FRAME_SIG_SIZE 4
 #define PM050_FRAME_SIG    { 0x42, 0x4D, 0x14, 0x00 }
@@ -26,45 +27,49 @@
 #define PM050_FRAME_PM100L   15
 #define PM050_FRAME_CRCH     22
 #define PM050_FRAME_CRCL     23
+#define PM050_DELAY			 20
 
 template <typename S>
+// Possible declarations are
+// PM050<HardwareSerial> pm(Serial);
+// PM050<SoftwareSerial> pm(SoftSerial);
 class PM050 {
 public:
-	uint16_t pm10;		// PM 1.0 value
-	uint16_t pm25;		// PM 2.5 value
-	uint16_t pm100;		// PM 10 value
-	bool 	 read();	// Read data from sensor and set PMxx
-	bool 	 isUpdated();	// Returns True if PMxx value changed since last isUpdated call
-	PM050(S* s, int16_t p = -1) {
+	uint16_t pm10	= 0;		// PM 1.0 value
+	uint16_t pm25	= 0;		// PM 2.5 value
+	uint16_t pm100	= 0;		// PM 10.0 value
+	bool read();
+	// Read data from sensor and set PMxx
+	bool 	 isUpdated();
+	// Returns True if PMxx value changed since last isUpdated call
+	PM050(S* s, int16_t p = -1);
 	// Constructor parameters:
-	// - UART port object reference
+	// - Serial port object reference
 	// - GPIO pin connected to sensor's SET pin. Can be omitted. -1 -- not control SET pin.
-		_serial = s;
-		_pin = p;
-	}
-	void	 begin() {
-	// Initialize & start measuring
-		_serial->begin(PM050_BAUDRATE);
-		if (_pin > 0) {
-			pinMode(_pin, OUTPUT);
-			measure(true);
-		}
-	}
-	void	 measure(bool m) {
+	void	 begin();
+	// Initialize Serial port & start measuring
+	void reset();
+	// Reset Serial port
+	uint8_t noData();
+	// Data read try since last correct data packet received
+	void measure(bool m);
 	// If SET pin used controls Measure/Idle state of sensor
 	// Parameter:
 	// true - perform measure
 	// false - enter idle state
-		if (_pin > 0) {
-			digitalWrite(_pin, m?LOW:HIGH);
-		}
-	}
-	bool	 isCollect(); //  If SET pin used returns current Measure state
+	void startMearure();
+	// Start measure
+	void stopMearure();
+	// Enter sleep state
+	bool isMeasure();
+	//  If SET pin used returns current Measure state
 private:
-	S*	 _serial;	// Serial object
-	uint8_t	 _pin;	// SET GPIO pin
-	bool	 _isUpdated;
-	uint8_t  _pos;	// Current buffer position
+	S*	 	 _serial;	// Serial port object
+	uint8_t	 _pin;		// SET GPIO pin
+	bool	 _isUpdated;// Is data updated since last isUpdated() call 
+	uint16_t _loops;	// Data read try count
+	uint8_t  _pos;		// Current buffer position
 	uint8_t  _buf[PM050_FRAME_SIZE];	// Data frame buffer
-	uint16_t crc();	// Calculates Data frame checksum
+	uint16_t crc();
+	// Calculates Data frame checksum
 };
