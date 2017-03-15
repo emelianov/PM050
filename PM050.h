@@ -73,3 +73,97 @@ private:
 	uint16_t crc();
 	// Calculates Data frame checksum
 };
+
+template <typename S> bool PM050<S>::read() {
+	uint16_t tPM10;
+	uint16_t tPM25;
+	uint16_t tPM100;
+	uint16_t check;
+	uint8_t sig[PM050_FRAME_SIG_SIZE] = PM050_FRAME_SIG;
+	_loops++;
+	while (_serial->available()) {
+		_buf[_pos] = _serial->read();
+		if (_pos < PM050_FRAME_SIG_SIZE && _buf[_pos] != sig[_pos]) {
+			_serial->print("error");
+			_pos = 0;
+			continue;
+		}
+		_pos++;
+		if (_pos >= PM050_FRAME_SIZE) {
+			_pos = 0;
+			check = _buf[PM050_FRAME_CRCH];
+			check <<= 8;
+			check += _buf[PM050_FRAME_CRCL];
+			if (crc() == check) {
+				_loops = 0;
+				tPM10  =  _buf[PM050_FRAME_PM10H];
+				tPM10  <<= 8;
+				tPM10  += _buf[PM050_FRAME_PM10L];
+				tPM25  += _buf[PM050_FRAME_PM25H];
+				tPM25  <<= 8;
+				tPM25  += _buf[PM050_FRAME_PM25L];
+				tPM100 =  _buf[PM050_FRAME_PM100H];
+				tPM100 <<= 8;
+				tPM100 += _buf[PM050_FRAME_PM100L];
+				if (pm10 != tPM10 || pm25 != tPM25 || pm100 != tPM100) {
+					_isUpdated = true;
+					pm10  = tPM10;
+					pm25  = tPM25;
+					pm100 = tPM100;
+				}
+			}
+		}
+	}
+	return _isUpdated;
+}
+template <typename S> bool PM050<S>::isUpdated() {
+	bool res;
+	res	= _isUpdated;
+	_isUpdated = false;
+	return res;
+}
+template <typename S> PM050<S>::PM050(S* s, int16_t p) {
+	_serial = s;
+	_pin = p;
+	_pos = 0;
+	_isUpdated = false;
+	_loops = 0;
+}
+template <typename S> void PM050<S>::begin() {
+	_serial->begin(PM050_BAUDRATE);
+	_pos = 0;
+	_loops = 0;
+	if (_pin > 0) {
+		pinMode(_pin, OUTPUT);
+		measure(true);
+	}
+}
+template <typename S> void PM050<S>::reset() {
+	_serial->end();
+	delay(PM050_DELAY);
+	begin();
+}
+template <typename S> uint8_t PM050<S>::noData() {
+	return _loops;
+}
+template <typename S> void PM050<S>::measure(bool m) {
+	if (_pin > 0) {
+		digitalWrite(_pin, m?LOW:HIGH);
+	}
+}
+template <typename S> void PM050<S>::startMearure() {
+	measure(true);
+}	
+template <typename S> void PM050<S>::stopMearure() {
+	measure(false);
+}	
+template <typename S> bool PM050<S>::isMeasure() {
+	return _pin > 0 && digitalRead(_pin) == LOW;
+}
+template <typename S> uint16_t PM050<S>::crc() {
+	uint16_t sum = 0;
+	for (uint8_t i = 0; i < PM050_FRAME_SIZE - 2; i++) {
+		sum += _buf[i];
+	}
+	return sum;
+}
